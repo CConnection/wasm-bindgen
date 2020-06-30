@@ -14,6 +14,8 @@ use assert_cmd::prelude::*;
 use rayon::prelude::*;
 use std::env;
 use std::fs;
+use std::io;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -93,17 +95,37 @@ fn runtest(test: &Path) -> Result<()> {
         .join("reference_test.wasm");
 
     let mut bindgen = Command::cargo_bin("wasm-bindgen")?;
-    bindgen
-        .arg("--out-dir")
-        .arg(td.path())
-        .arg(&wasm)
-        .arg("--no-typescript");
+    let file_name = test.file_name().expect("Not a file").to_str();
+
+    match file_name {
+        Some("web-audio.rs") => {
+            bindgen
+                .arg("--out-dir")
+                .arg(td.path())
+                .arg(&wasm)
+                .arg("--no-typescript")
+                .arg("--target")
+                .arg("web-audio");
+        }
+        Some(_) => {
+            bindgen
+                .arg("--out-dir")
+                .arg(td.path())
+                .arg(&wasm)
+                .arg("--no-typescript");
+        }
+        None => {
+            bail!("Can't convert file_name to string");
+        }
+    }
+
     if contents.contains("// enable-externref") {
         bindgen.env("WASM_BINDGEN_EXTERNREF", "1");
     }
     if interface_types {
         bindgen.env("WASM_INTERFACE_TYPES", "1");
     }
+
     exec(&mut bindgen)?;
 
     if interface_types {
@@ -112,7 +134,18 @@ fn runtest(test: &Path) -> Result<()> {
         let wat = sanitize_wasm(&wasm)?;
         assert_same(&wat, &test.with_extension("wat"))?;
     } else {
-        let js = fs::read_to_string(td.path().join("reference_test_bg.js"))?;
+        let js = match file_name {
+            Some("web-audio.rs") => { fs::read_to_string(td.path().join("reference_test.js"))? }
+            Some(_) => { fs::read_to_string(td.path().join("reference_test_bg.js"))? }
+            None => { bail!("Can't convert file_name to string"); }
+        };
+
+        match file_name {
+            Some("web-audio.rs") => { print!("{}", js); }
+            Some(_) => {}
+            None => { bail!("Can't convert file_name to string"); }
+        };
+
         assert_same(&js, &test.with_extension("js"))?;
         let wat = sanitize_wasm(&td.path().join("reference_test_bg.wasm"))?;
         assert_same(&wat, &test.with_extension("wat"))?;
