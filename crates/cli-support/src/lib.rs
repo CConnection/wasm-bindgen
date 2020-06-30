@@ -611,8 +611,7 @@ impl Output {
         self._emit(out_dir.as_ref())
     }
 
-    fn
-    _emit(&mut self, out_dir: &Path) -> Result<(), Error> {
+    fn _emit(&mut self, out_dir: &Path) -> Result<(), Error> {
         let wasm_name = match &self.generated {
             Generated::InterfaceTypes => self.stem.clone(),
             Generated::Js(_) => format!("{}_bg", self.stem),
