@@ -144,6 +144,7 @@ impl<'a> Context<'a> {
                 experimental_modules: true,
             }
             | OutputMode::Web
+            | OutputMode::WebAudio
             | OutputMode::Deno => {
                 if contents.starts_with("function") {
                     let body = &contents[8..];
@@ -435,6 +436,12 @@ impl<'a> Context<'a> {
                 init = self.gen_init(needs_manual_start, Some(&mut imports))?;
                 footer.push_str("export default init;\n");
             }
+
+            OutputMode::WebAudio => {
+                self.imports_post.push_str("let wasm;\n");
+                init = self.gen_init(needs_manual_start, Some(&mut imports))?;
+                footer.push_str("export default init;\n");
+            }
         }
 
         let (init_js, init_ts) = init;
@@ -514,6 +521,7 @@ impl<'a> Context<'a> {
                 experimental_modules: true,
             }
             | OutputMode::Web
+            | OutputMode::WebAudio
             | OutputMode::Deno => {
                 for (module, items) in crate::sorted_iter(&self.js_imports) {
                     imports.push_str("import { ");
@@ -677,33 +685,11 @@ impl<'a> Context<'a> {
             imports_init.push_str(&format!("imports['{}'] = __wbg_star{};\n", extra, i));
         }
 
-        let js = format!(
-            "\
-                async function load(module, imports{init_memory_arg}) {{
-                    if (typeof Response === 'function' && module instanceof Response) {{
-                        {init_memory2}
-                        if (typeof WebAssembly.instantiateStreaming === 'function') {{
-                            try {{
-                                return await WebAssembly.instantiateStreaming(module, imports);
-
-                            }} catch (e) {{
-                                if (module.headers.get('Content-Type') != 'application/wasm') {{
-                                    console.warn(\"`WebAssembly.instantiateStreaming` failed \
-                                                    because your server does not serve wasm with \
-                                                    `application/wasm` MIME type. Falling back to \
-                                                    `WebAssembly.instantiate` which is slower. Original \
-                                                    error:\\n\", e);
-
-                                }} else {{
-                                    throw e;
-                                }}
-                            }}
-                        }}
-
-                        const bytes = await module.arrayBuffer();
-                        return await WebAssembly.instantiate(bytes, imports);
-
-                    }} else {{
+        let js = match self.config.mode {
+            OutputMode::WebAudio => {
+                format!(
+                    "\
+                    async function load(module, imports{init_memory_arg}) {{
                         {init_memory1}
                         const instance = await WebAssembly.instantiate(module, imports);
 
@@ -714,36 +700,108 @@ impl<'a> Context<'a> {
                             return instance;
                         }}
                     }}
-                }}
 
-                async function init(input{init_memory_arg}) {{
-                    {default_module_path}
-                    const imports = {{}};
-                    {imports_init}
+                    export async function fetchWasm(input) {{
+                        if (typeof input === 'string' || (typeof Request === 'function' && input instanceof Request) || (typeof URL === 'function' && input instanceof URL)) {{
+                            input = fetch(input);
+                        }}
 
-                    if (typeof input === 'string' || (typeof Request === 'function' && input instanceof Request) || (typeof URL === 'function' && input instanceof URL)) {{
-                        input = fetch(input);
+                        return input;
                     }}
 
-                    const {{ instance, module }} = await load(await input, imports{init_memory_arg});
+                    export async function init(fetchedWasm{init_memory_arg}) {{
+                        {default_module_path}
+                        const imports = {{}};
+                        {imports_init}
+                        const {{ instance, module }} = await load(fetchedWasm, imports{init_memory_arg});
 
-                    wasm = instance.exports;
-                    init.__wbindgen_wasm_module = module;
-                    {start}
-                    return wasm;
-                }}
-            ",
-            init_memory_arg = init_memory_arg,
-            default_module_path = default_module_path,
-            init_memory1 = init_memory1,
-            init_memory2 = init_memory2,
-            start = if needs_manual_start {
-                "wasm.__wbindgen_start();"
-            } else {
-                ""
-            },
-            imports_init = imports_init,
-        );
+                        wasm = instance.exports;
+                        init.__wbindgen_wasm_module = module;
+                        {start}
+                        return wasm;
+                    }}
+                    ",
+                    init_memory_arg = init_memory_arg,
+                    default_module_path = default_module_path,
+                    init_memory1 = init_memory1,
+                    start = if needs_manual_start {
+                        "wasm.__wbindgen_start();"
+                    } else {
+                        ""
+                    },
+                    imports_init = imports_init,
+                )
+            }
+            _ => {
+                format!(
+                    "\
+                    async function load(module, imports{init_memory_arg}) {{
+                        if (typeof Response === 'function' && module instanceof Response) {{
+                            {init_memory2}
+                            if (typeof WebAssembly.instantiateStreaming === 'function') {{
+                                try {{
+                                    return await WebAssembly.instantiateStreaming(module, imports);
+
+                                }} catch (e) {{
+                                    if (module.headers.get('Content-Type') != 'application/wasm') {{
+                                        console.warn(\"`WebAssembly.instantiateStreaming` failed \
+                                                        because your server does not serve wasm with \
+                                                        `application/wasm` MIME type. Falling back to \
+                                                        `WebAssembly.instantiate` which is slower. Original \
+                                                        error:\\n\", e);
+
+                                    }} else {{
+                                        throw e;
+                                    }}
+                                }}
+                            }}
+
+                            const bytes = await module.arrayBuffer();
+                            return await WebAssembly.instantiate(bytes, imports);
+
+                        }} else {{
+                            {init_memory1}
+                            const instance = await WebAssembly.instantiate(module, imports);
+
+                            if (instance instanceof WebAssembly.Instance) {{
+                                return {{ instance, module }};
+
+                            }} else {{
+                                return instance;
+                            }}
+                        }}
+                    }}
+
+                    async function init(input{init_memory_arg}) {{
+                        {default_module_path}
+                        const imports = {{}};
+                        {imports_init}
+
+                        if (typeof input === 'string' || (typeof Request === 'function' && input instanceof Request) || (typeof URL === 'function' && input instanceof URL)) {{
+                            input = fetch(input);
+                        }}
+
+                        const {{ instance, module }} = await load(await input, imports{init_memory_arg});
+
+                        wasm = instance.exports;
+                        init.__wbindgen_wasm_module = module;
+                        {start}
+                        return wasm;
+                    }}
+                    ",
+                    init_memory_arg = init_memory_arg,
+                    default_module_path = default_module_path,
+                    init_memory1 = init_memory1,
+                    init_memory2 = init_memory2,
+                    start = if needs_manual_start {
+                        "wasm.__wbindgen_start();"
+                    } else {
+                        ""
+                    },
+                    imports_init = imports_init,
+                )
+            }
+        };
 
         Ok((js, ts))
     }
@@ -1334,6 +1392,7 @@ impl<'a> Context<'a> {
             }
             OutputMode::Deno
             | OutputMode::Web
+            | OutputMode::WebAudio
             | OutputMode::NoModules { .. }
             | OutputMode::Bundler { browser_only: true } => {
                 self.global(&format!("let cached{0} = new {0}{1};", s, args))

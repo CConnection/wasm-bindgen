@@ -96,6 +96,7 @@ fn rmain(args: &Args) -> Result<(), Error> {
         match name.as_str() {
             "bundler" => b.bundler(true)?,
             "web" => b.web(true)?,
+            "web-audio" => b.web_audio(true)?,
             "no-modules" => b.no_modules(true)?,
             "nodejs" => b.nodejs(true)?,
             "deno" => b.deno(true)?,

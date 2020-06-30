@@ -72,6 +72,7 @@ struct JsGenerated {
 enum OutputMode {
     Bundler { browser_only: bool },
     Web,
+    WebAudio,
     NoModules { global: String },
     Node { experimental_modules: bool },
     Deno,
@@ -185,6 +186,13 @@ impl Bindgen {
     pub fn web(&mut self, web: bool) -> Result<&mut Bindgen, Error> {
         if web {
             self.switch_mode(OutputMode::Web, "--target web")?;
+        }
+        Ok(self)
+    }
+
+    pub fn web_audio(&mut self, web_audio: bool) -> Result<&mut Bindgen, Error> {
+        if web_audio {
+            self.switch_mode(OutputMode::WebAudio, "--target web-audio")?;
         }
         Ok(self)
     }
@@ -603,7 +611,8 @@ impl Output {
         self._emit(out_dir.as_ref())
     }
 
-    fn _emit(&mut self, out_dir: &Path) -> Result<(), Error> {
+    fn
+    _emit(&mut self, out_dir: &Path) -> Result<(), Error> {
         let wasm_name = match &self.generated {
             Generated::InterfaceTypes => self.stem.clone(),
             Generated::Js(_) => format!("{}_bg", self.stem),
