@@ -560,29 +560,58 @@ impl<'a> Context<'a> {
             ("", "")
         };
         let arg_optional = if has_module_or_path_optional { "?" } else { "" };
-        Ok(format!(
-            "\n\
-            export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;\n\
-            \n\
-            export interface InitOutput {{\n\
-            {output}}}\n\
-            \n\
-            /**\n\
-            * If `module_or_path` is {{RequestInfo}} or {{URL}}, makes a request and\n\
-            * for everything else, calls `WebAssembly.instantiate` directly.\n\
-            *\n\
-            * @param {{InitInput | Promise<InitInput>}} module_or_path\n\
-            {}\
-            *\n\
-            * @returns {{Promise<InitOutput>}}\n\
-            */\n\
-            export default function init \
-                (module_or_path{}: InitInput | Promise<InitInput>{}): Promise<InitOutput>;
-            export function fetchWasm(input): Promise<Response>;
-        ",
-            memory_doc, arg_optional, memory_param,
-            output = output,
-        ))
+
+        let ts = match self.config.mode {
+            OutputMode::WebAudio => {
+                format!(
+                    "\n\
+                        export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;\n\
+                        \n\
+                        export interface InitOutput {{\n\
+                        {output}}}\n\
+                        \n\
+                        /**\n\
+                        * If `module_or_path` is {{RequestInfo}} or {{URL}}, makes a request and\n\
+                        * for everything else, calls `WebAssembly.instantiate` directly.\n\
+                        *\n\
+                        * @param {{InitInput | Promise<InitInput>}} module_or_path\n\
+                        {}\
+                        *\n\
+                        * @returns {{Promise<InitOutput>}}\n\
+                        */\n\
+                        export default function init \
+                            (module_or_path{}: InitInput | Promise<InitInput>{}): Promise<InitOutput>;
+                        export function fetchWasm(input): Promise<Response>;
+                    ",
+                    memory_doc, arg_optional, memory_param,
+                    output = output,
+                )            }
+            _ => {
+                format!(
+                    "\n\
+                        export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;\n\
+                        \n\
+                        export interface InitOutput {{\n\
+                        {output}}}\n\
+                        \n\
+                        /**\n\
+                        * If `module_or_path` is {{RequestInfo}} or {{URL}}, makes a request and\n\
+                        * for everything else, calls `WebAssembly.instantiate` directly.\n\
+                        *\n\
+                        * @param {{InitInput | Promise<InitInput>}} module_or_path\n\
+                        {}\
+                        *\n\
+                        * @returns {{Promise<InitOutput>}}\n\
+                        */\n\
+                        export default function init \
+                            (module_or_path{}: InitInput | Promise<InitInput>{}): Promise<InitOutput>;
+                    ",
+                    memory_doc, arg_optional, memory_param,
+                    output = output,
+                )
+            }
+        };
+        Ok(ts)
     }
 
     fn gen_init(
