@@ -578,6 +578,7 @@ impl<'a> Context<'a> {
             */\n\
             export default function init \
                 (module_or_path{}: InitInput | Promise<InitInput>{}): Promise<InitOutput>;
+            export function fetchWasm(input): Promise<Response>;
         ",
             memory_doc, arg_optional, memory_param,
             output = output,
